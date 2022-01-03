@@ -8,11 +8,13 @@ use App\Entity\Role;
 use App\Entity\User;
 use App\Form\ChangePwsdFormType;
 use App\Form\UserFormType;
+use App\Repository\Interfaces\UserRepositoryInterface;
 use App\Repository\RoleRepository;
 use App\Repository\UserRepository;
 use Doctrine\ORM\EntityManagerInterface;
 use Sensio\Bundle\FrameworkExtraBundle\Configuration\IsGranted;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
+use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\Routing\Annotation\Route;
 use Symfony\Component\Security\Core\Encoder\UserPasswordEncoderInterface;
@@ -20,15 +22,18 @@ use Symfony\Contracts\Translation\TranslatorInterface;
 
 class UserController extends BaseController
 {
-    private $userRepository;
+    private $user;
     private $passwordEncoder;
 
     private $entityManager;
     private $roleRepository;
 
-    public function __construct(UserRepository $userRepository, RoleRepository $roleRepository, UserPasswordEncoderInterface $passwordEncoder, EntityManagerInterface $entityManager)
+    public function __construct(
+        RoleRepository $roleRepository,
+        UserPasswordEncoderInterface $passwordEncoder,
+        EntityManagerInterface $entityManager
+    )
     {
-        $this->userRepository = $userRepository;
         $this->passwordEncoder = $passwordEncoder;
         $this->entityManager = $entityManager;
         $this->roleRepository = $roleRepository;
@@ -45,7 +50,6 @@ class UserController extends BaseController
             ->setUsername("mamless")
             ->setRoles(["ROLE_ADMIN"])
             ->setPassword($this->passwordEncoder->encodePassword($user, $request->get("password")));
-        // $user = $this->userRepository->saveUser($user);
         return $this->json(["id" => $user->getId(), "password" => $user->getPassword(), "decode" => $this->passwordEncoder->isPasswordValid($user, 1)]);
     }
 
@@ -53,10 +57,33 @@ class UserController extends BaseController
      * @Route("/admin/user",name="app_admin_users")
      * @IsGranted("ROLE_SUPERUSER")
      */
-    public function users()
+    public function users(Request $request): JsonResponse
     {
-        $users = $this->userRepository->findAll();
-        return $this->render("admin/user/user.html.twig", ["users" => $users]);
+        dump($this->get('App\Services\UserService'));
+        exit;
+        $columns = $request->get('allVisiblecolumns', []);
+
+        $length = $request->get('length');
+        $length = $length && ($length != -1) ? $length : 0;
+
+        $start = $request->get('start');
+        $start = $length ? ($start && ($start != -1) ? $start : 0) / $length : 0;
+
+        $search = $request->get('columns');
+        $order = $request->get('order', false);
+
+        $filters = [
+            'query' => $search,
+            'order' => $order
+        ];
+        $users=$this->user->search($filters, $start, $length);
+        $output = array(
+            'data' => [],
+            'recordsFiltered' => $users->count(),
+            'recordsTotal' => $this->user->count([])
+        );
+
+        return new JsonResponse($output);
     }
 
     /**
@@ -119,7 +146,7 @@ class UserController extends BaseController
      */
     public function activate(User $user)
     {
-        $user = $this->userRepository->changeValidite($user);
+        $user = $this->user->changeValidity($user);
         return $this->json(["message" => "success", "value" => $user->isValid()]);
     }
 
@@ -129,7 +156,7 @@ class UserController extends BaseController
      */
     public function delete(User $user)
     {
-        $user = $this->userRepository->delete($user);
+        $user = $this->user->deleteSafe($user);
         /*$this->addFlash("success","Utilisateur supprimé");
         return $this->redirectToRoute('app_admin_users');*/
         return $this->json(["message" => "success", "value" => $user->isDeleted()]);
@@ -172,7 +199,7 @@ class UserController extends BaseController
     {
         $action = $request->get("action");
         $ids = $request->get("ids");
-        $users = $this->userRepository->findBy(["id" => $ids]);
+        $users = $this->user->findBy(["id" => $ids]);
 
         if ($action == $translator->trans('backend.user.deactivate')) {
             foreach ($users as $user) {

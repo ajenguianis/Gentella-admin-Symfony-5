@@ -6,6 +6,7 @@
 parameters:
     locale: 'en'
     app_locales: en|fr
+    userRepositoryInterface: App\Repository\Interfaces\UserRepositoryInterface
 
 services:
     # default configuration for services in *this* file
@@ -35,3 +36,10 @@ services:
 
     App\EventSubscriber\RedirectToLocaleSubscriber:
         arguments: ['@router', '%app_locales%', '%locale%']
+
+    App\Services\UserService:
+        arguments: ['%userRepositoryInterface%']
+        public: true
+        calls:
+            - setLogger: ['@logger']
+            - addService: [ container, "@service_container"  ]

@@ -32,6 +32,7 @@ backend:
     email: Email
     name: Nom Complet
     modifier: Modifier
+    actions: actions
     status: Etat ?
     password: Mot de passe
     cancel: Annuler
